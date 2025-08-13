@@ -1,12 +1,12 @@
 /* app.js - P❤️S Chat (Firestore, Anonymous Auth, no Storage) */
 /* Replace firebaseConfig with your project details */
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+ apiKey: "AIzaSyBsEfun4555Y1TaBqxFEBz-7vmjKYcDCqg",
+  authDomain: "ps-chat-5699a.firebaseapp.com",
+  projectId: "ps-chat-5699a",
+  storageBucket: "ps-chat-5699a.firebasestorage.app",
+  messagingSenderId: "1087992118523",
+  appId: "1:1087992118523:web:5ca154a66ca6a917fb845e"
 };
 firebase.initializeApp(firebaseConfig);
 
