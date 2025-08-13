@@ -1,235 +1,68 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Minimal WebRTC + Firebase Signaling Demo</title>
-  <style>
-    body { font-family: system-ui, -apple-system, Roboto, "Segoe UI", Arial; padding: 18px; max-width: 900px; margin: auto; }
-    h1 { font-size: 20px; margin-bottom: 8px; }
-    #videos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
-    video { width: 100%; height: 360px; background: #000; border-radius: 8px; object-fit: cover; }
-    .controls { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
-    button, input { padding: 8px 10px; border-radius:6px; border:1px solid #ccc; }
-    input { min-width: 220px; }
-    .hint { font-size: 13px; color:#555; margin-top:10px }
-    pre { background:#f7f7f7; padding:10px; border-radius:6px; overflow:auto }
-  </style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>P❤️S Chat (No Storage)</title>
+  <link rel="stylesheet" href="style.css"/>
+  <!-- Firebase compat SDKs (easy to drop in) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 </head>
 <body>
-  <h1>Minimal WebRTC + Firebase Realtime Database Signaling</h1>
-  <div class="controls">
-    <button id="startBtn">Start camera</button>
-    <button id="createBtn" disabled>Create room (offer)</button>
-    <input id="roomIdInput" placeholder="Room ID to join" />
-    <button id="joinBtn" disabled>Join room (answer)</button>
-    <button id="hangupBtn" disabled>Hang up</button>
+  <div class="card">
+    <div class="top">
+      <div class="left">
+        <div class="avatar"></div>
+        <div id="presence" class="status-text">Offline</div>
+      </div>
+
+      <div class="center-title">P❤️S</div>
+
+      <div class="right-icon" id="videoBtn" title="Video call (not implemented)">
+        <svg class="video-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="2" y="6" width="14" height="12" rx="2" ry="2"></rect>
+          <path d="M22 7l-6 4v2l6 4V7z"></path>
+        </svg>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button id="tabChat" class="tab-btn active">Chat</button>
+      <button id="tabStatus" class="tab-btn">Status</button>
+    </div>
+
+    <!-- Chat Panel -->
+    <div id="panelChat" class="panel">
+      <div id="chatBody" class="chat-body"></div>
+
+      <div class="bottom">
+        <div class="input-box" contenteditable="true" id="messageBox" role="textbox">Message</div>
+        <button id="sendBtn" class="send-btn">SEND</button>
+      </div>
+    </div>
+
+    <!-- Status Panel -->
+    <div id="panelStatus" class="panel hidden">
+      <div class="status-uploader">
+        <input id="statusText" type="text" placeholder="What's on your mind?" />
+        <input id="statusImageUrl" type="text" placeholder="Optional image URL (host elsewhere)" />
+        <button id="postStatusBtn">Post</button>
+      </div>
+      <div id="statusList" class="status-list"></div>
+    </div>
   </div>
 
-  <div id="videos">
-    <div>
-      <label>Local</label>
-      <video id="localVideo" autoplay playsinline muted></video>
-    </div>
-    <div>
-      <label>Remote</label>
-      <video id="remoteVideo" autoplay playsinline></video>
+  <!-- Modal to view status full -->
+  <div id="statusModal" class="modal hidden">
+    <div class="modal-content">
+      <button id="closeModal" class="close-btn">✕</button>
+      <div id="modalMedia"></div>
+      <div id="modalCaption" class="modal-caption"></div>
     </div>
   </div>
 
-  <p class="hint">Notes: Replace the <code>firebaseConfig</code> object below with your Firebase project's config. Enable Realtime Database (in test mode for dev). For NAT/firewall cases you'll need a TURN server.</p>
-
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-
-  <script>
-  // ---------- CONFIG: Paste your Firebase config here ----------
-  const firebaseConfig = {
-   apiKey: "AIzaSyBsEfun4555Y1TaBqxFEBz-7vmjKYcDCqg",
-  authDomain: "ps-chat-5699a.firebaseapp.com",
-  projectId: "ps-chat-5699a",
-  storageBucket: "ps-chat-5699a.firebasestorage.app",
-  messagingSenderId: "1087992118523",
-  appId: "1:1087992118523:web:5ca154a66ca6a917fb845e"
-
-  };
-  // ------------------------------------------------------------
-
-  // Initialize Firebase
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-
-  // Basic page elements
-  const startBtn = document.getElementById('startBtn');
-  const createBtn = document.getElementById('createBtn');
-  const joinBtn = document.getElementById('joinBtn');
-  const hangupBtn = document.getElementById('hangupBtn');
-  const roomIdInput = document.getElementById('roomIdInput');
-  const localVideo = document.getElementById('localVideo');
-  const remoteVideo = document.getElementById('remoteVideo');
-
-  let localStream = null;
-  let remoteStream = null;
-  let pc = null; // RTCPeerConnection
-  let roomRef = null;
-
-  // STUN/TURN configuration - add TURN servers for production
-  const configuration = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' }
-      // Example TURN entry (replace with your TURN):
-      // { urls: 'turn:turn.example.com:3478', username: 'user', credential: 'pass' }
-    ]
-  };
-
-  startBtn.onclick = async () => {
-    startBtn.disabled = true;
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localVideo.srcObject = localStream;
-      createBtn.disabled = false;
-      joinBtn.disabled = false;
-    } catch (e) {
-      console.error('getUserMedia() error:', e);
-      alert('Could not access camera/microphone: ' + e.message);
-      startBtn.disabled = false;
-    }
-  };
-
-  createBtn.onclick = async () => {
-    createBtn.disabled = true;
-    joinBtn.disabled = true;
-    // Create RTCPeerConnection
-    pc = new RTCPeerConnection(configuration);
-
-    // Create remote stream and attach when tracks arrive
-    remoteStream = new MediaStream();
-    remoteVideo.srcObject = remoteStream;
-    pc.ontrack = (event) => {
-      event.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
-    };
-
-    // Collect ICE candidates and push to Firebase under /rooms/<roomId>/callerCandidates
-    const callerCandidatesCollection = db.ref();
-
-    pc.onicecandidate = (event) => {
-      if (!event.candidate) return;
-      if (!roomRef) return;
-      const json = event.candidate.toJSON();
-      roomRef.child('callerCandidates').push(json);
-    };
-
-    // Add local tracks
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-    // Create offer
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    // Create a new room in RTDB
-    const newRoomRef = db.ref('rooms').push();
-    roomRef = newRoomRef;
-
-    const roomWithOffer = {
-      offer: { type: offer.type, sdp: offer.sdp }
-    };
-    await roomRef.set(roomWithOffer);
-
-    // Listen for answer
-    roomRef.child('answer').on('value', async snapshot => {
-      const answer = snapshot.val();
-      if (!answer) return;
-      const remoteDesc = new RTCSessionDescription(answer);
-      await pc.setRemoteDescription(remoteDesc);
-    });
-
-    // Listen for remote ICE candidates (answerer candidates)
-    roomRef.child('answerCandidates').on('child_added', snapshot => {
-      const candidate = snapshot.val();
-      pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error(e));
-    });
-
-    // Expose room id for manual sharing
-    const roomId = roomRef.key;
-    prompt('Share this Room ID with your friend to join:', roomId);
-    roomIdInput.value = roomId;
-    hangupBtn.disabled = false;
-  };
-
-  joinBtn.onclick = async () => {
-    const roomId = roomIdInput.value.trim();
-    if (!roomId) { alert('Enter room id'); return; }
-    joinBtn.disabled = true;
-    createBtn.disabled = true;
-
-    roomRef = db.ref('rooms/' + roomId);
-    const roomSnapshot = await roomRef.get();
-    if (!roomSnapshot.exists()) { alert('Room does not exist.'); joinBtn.disabled = false; createBtn.disabled = false; return; }
-
-    pc = new RTCPeerConnection(configuration);
-    remoteStream = new MediaStream();
-    remoteVideo.srcObject = remoteStream;
-    pc.ontrack = (event) => {
-      event.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
-    };
-
-    // Add local tracks
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-    // Collect ICE candidates and push to Firebase under /rooms/<roomId>/answerCandidates
-    pc.onicecandidate = (event) => {
-      if (!event.candidate) return;
-      roomRef.child('answerCandidates').push(event.candidate.toJSON());
-    };
-
-    // Get offer
-    const roomData = roomSnapshot.val();
-    const offer = roomData.offer;
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-
-    // Create answer
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    // Save answer to room
-    await roomRef.child('answer').set({ type: answer.type, sdp: answer.sdp });
-
-    // Listen for caller ICE candidates
-    roomRef.child('callerCandidates').on('child_added', snapshot => {
-      const candidate = snapshot.val();
-      pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error(e));
-    });
-
-    hangupBtn.disabled = false;
-  };
-
-  hangupBtn.onclick = async () => {
-    // Close RTCPeerConnection and stop tracks
-    if (pc) {
-      pc.getSenders().forEach(sender => pc.removeTrack(sender));
-      pc.close();
-    }
-    if (localStream) localStream.getTracks().forEach(t => t.stop());
-
-    // Remove room from DB if creator
-    if (roomRef) {
-      try { await roomRef.remove(); } catch (e) { console.warn('Could not remove room:', e); }
-      roomRef = null;
-    }
-
-    // Reset UI
-    localVideo.srcObject = null;
-    remoteVideo.srcObject = null;
-    localStream = null; remoteStream = null; pc = null;
-    startBtn.disabled = false; createBtn.disabled = true; joinBtn.disabled = true; hangupBtn.disabled = true;
-  };
-
-  // Optional: cleanup when closing tab
-  window.addEventListener('beforeunload', async () => {
-    if (roomRef) {
-      try { await roomRef.remove(); } catch (e) {}
-    }
-  });
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
