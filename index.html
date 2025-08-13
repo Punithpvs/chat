@@ -55,13 +55,15 @@
   </div>
 
   <!-- Modal to view status full -->
-  <div id="statusModal" class="modal hidden">
-    <div class="modal-content">
-      <button id="closeModal" class="close-btn">✕</button>
-      <div id="modalMedia"></div>
-      <div id="modalCaption" class="modal-caption"></div>
-    </div>
+ <!-- Video Call Modal -->
+<div id="videoModal" class="modal hidden">
+  <div class="modal-content">
+    <button id="endVideo" class="close-btn">End Call ✕</button>
+    <video id="localPreview" autoplay muted></video>
+    <video id="remotePreview" autoplay></video>
   </div>
+</div>
+
 
   <script src="app.js"></script>
 </body>
